@@ -127,20 +127,23 @@ class EdrHandler(Greenlet):
                 if response.headers.get('X-Request-ID'):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
             except RetryException as re:
-                if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
-                    logger.info('Empty response for tender {}.{}.'.format(tender_data.tender_id, document_id),
-                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                                      params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                    file_content = re.args[1].json().get('errors')[0].get('description')[0]
-                    file_content['meta'].update(tender_data.file_content['meta'])
-                    file_content['meta'].update({"version": version})  # add filed meta.version
-                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, [], file_content)
-                    self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
-                    self.retry_edrpou_codes_queue.get()
-                    continue
-                logger.info("RetryException error message {}".format(re.args[0]))
-                self.handle_status_response(re.args[1], tender_data.tender_id)
+                try:
+                    if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
+                        logger.info('Empty response for tender {}.{}.'.format(tender_data.tender_id, document_id),
+                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
+                                                          params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                        file_content = re.args[1].json().get('errors')[0].get('description')[0]
+                        file_content['meta'].update(tender_data.file_content['meta'])
+                        file_content['meta'].update({"version": version})  # add filed meta.version
+                        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                    tender_data.item_name, [], file_content)
+                        self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
+                        self.retry_edrpou_codes_queue.get()
+                        continue
+                    logger.info("RetryException error message {}".format(re.args[0]))
+                    self.handle_status_response(re.args[1], tender_data.tender_id)
+                except ValueError as ve:
+                    logger.info("Exception could not be parsed into json. Error: {}".format(re))
                 logger.info('Leave tender {} with {} id {} in retry_edrpou_codes_queue'.format(
                     tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                     extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
@@ -261,10 +264,13 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    self.handle_status_response(re.args[1], tender_data.tender_id)
-                    logger.info('Leave tender {} with {} id {} {} in retry_edr_ids_queue. Error response {}'.format(
-                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
-                        extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                    try:
+                        self.handle_status_response(re.args[1], tender_data.tender_id)
+                        logger.info('Leave tender {} with {} id {} {} in retry_edr_ids_queue. Error response {}'.format(
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
+                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                    except ValueError as ve:
+                        logger.info("Exception could not be parsed into json. Error: {}".format(re))
                     gevent.sleep(0)
                 else:
                     if response.status_code == 429:
