@@ -349,7 +349,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
         worker.get_edr_id_request = MagicMock(
             side_effect=[
-                RetryException("text", MagicMock(status_code=404, json=MagicMock(side_effect=ValueError))),
                 RetryException("text", MagicMock(status_code=404, json=MagicMock(return_value={
                           'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                  "code": "notFound"},

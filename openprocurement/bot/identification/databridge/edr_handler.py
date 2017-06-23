@@ -124,34 +124,30 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             try:
-                # import pdb;pdb.set_trace()
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
                 if response.headers.get('X-Request-ID'):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
             except RetryException as re:
-                try:
-                    if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
-                        logger.info('Empty response for {} doc_id: {}.'.format(data_string(tender_data), document_id),
-                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                        file_content = re.args[1].json().get('errors')[0].get('description')[0]
-                        file_content['meta'].update(tender_data.file_content['meta'])
-                        file_content['meta'].update({"version": version})  # add filed meta.version
-                        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, [], file_content)
-                        self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
-                        self.retry_edrpou_codes_queue.get()
-                        continue
-                    logger.info("RetryException error message {}".format(re.args[0]))
-                    self.handle_status_response(re.args[1], tender_data.tender_id)
-                except ValueError as ve:
-                    logger.info("Exception could not be parsed into json. Error: {}".format(re))
+                if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
+                    logger.info('Empty response for {} doc_id: {}.'.format(data_string(tender_data), document_id),
+                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
+                                                      params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                    file_content = re.args[1].json().get('errors')[0].get('description')[0]
+                    file_content['meta'].update(tender_data.file_content['meta'])
+                    file_content['meta'].update({"version": version})  # add filed meta.version
+                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                tender_data.item_name, [], file_content)
+                    self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
+                    self.retry_edrpou_codes_queue.get()
+                    continue
+                logger.info("RetryException error message {}".format(re.args[0]))
+                self.handle_status_response(re.args[1], tender_data.tender_id)
                 logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
-            except Exception:
-                logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
+            except Exception as e:
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(data_string(tender_data), e.message),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
@@ -272,7 +268,7 @@ class EdrHandler(Greenlet):
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
                     except ValueError as ve:
-                        logger.info("Exception could not be parsed into json. Error: {}".format(re))
+                        logger.exception("Exception could not be parsed into json.")
                     self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     gevent.sleep(0)
                 else:
