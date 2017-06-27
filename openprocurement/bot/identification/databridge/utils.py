@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from copy import deepcopy
+
 import yaml
 import io
 
@@ -10,16 +12,30 @@ from openprocurement.bot.identification.databridge.constants import file_name
 
 id_passport_len = 9
 
-Data = namedtuple('Data', [
-    'tender_id',  # tender ID
-    'item_id',  # qualification or award ID
-    'code',  # EDRPOU, IPN or passport
-    'item_name',  # "qualifications" or "awards"
-    'file_content'  # details for file
-])
+
+class Data(object):
+    def __init__(self, tender_id, item_id, code, item_name, file_content):
+        self.tender_id = tender_id  # tender ID
+        self.item_id = item_id  # qualification or award ID
+        self.code = code  # EDRPOU, IPN or passport
+        self.item_name = item_name  # "qualifications" or "awards"
+        self.file_content = deepcopy(file_content)  # details for file
+
+    def __str__(self):
+        return "tender {} {} id: {}".format(self.tender_id, self.item_name[:-1], self.item_id)
+
+    def __eq__(self, other):
+        return (self.tender_id == other.tender_id and
+                self.item_id == other.item_id and
+                self.code == other.code and
+                self.item_name == other.item_name and
+                self.file_content == other.file_content
+                )
+
 
 def data_string(data):
     return "tender {} {} id: {}".format(data.tender_id, data.item_name[:-1], data.item_id)
+
 
 def journal_context(record={}, params={}):
     for k, v in params.items():
@@ -62,7 +78,6 @@ def check_add_suffix(list_ids, document_id, number):
 
 
 def check_412(func):
-
     def func_wrapper(obj, *args, **kwargs):
         try:
             response = func(obj, *args, **kwargs)
@@ -73,4 +88,5 @@ def check_412(func):
             else:
                 raise ResourceError(re)
         return response
+
     return func_wrapper
