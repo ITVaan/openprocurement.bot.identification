@@ -291,6 +291,135 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
+    def test_retry_get_edr_data_mock_403(self, mrequest, gevent_sleep):
+        """Accept 429 status code in first request with header 'Retry-After'"""
+        gevent_sleep.side_effect = custom_sleep
+        edr_req_id = generate_request_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        edrpou_codes_queue = Queue(10)
+        check_queue = Queue(10)
+        expected_result = []
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        worker.retry_edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards",
+                                    {'meta': {'id': document_id, 'author': author,
+                                              'sourceRequests': [
+                                                  'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
+        expected_result.append(Data(tender_id, award_id, '123', "awards",
+                                    file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                            "code": "notFound"},
+                                                  "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                           'id': document_id, "version": version, 'author': author,
+                                                           'sourceRequests': [
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+        worker.get_edr_data_request = MagicMock(side_effect=[
+            RetryException("test", MagicMock(status_code=403)),
+            RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': edr_req_id},
+                                             json=MagicMock(return_value=
+                                                            {"errors":
+                                                                 [{"description":
+                                                                       [{"error": {"errorDetails": "Couldn't find this code in EDR.", "code": u"notFound"},
+                                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                                  'id': document_id, "version": version, 'author': author
+                                                                                  }}]}]
+                                                             })))
+        ])
+        for result in expected_result:
+            self.assertEquals(check_queue.get(), result)
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_get_edr_data_mock_404(self, mrequest, gevent_sleep):
+        """Accept 429 status code in first request with header 'Retry-After'"""
+        gevent_sleep.side_effect = custom_sleep
+        edr_req_id = generate_request_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        edrpou_codes_queue = Queue(10)
+        check_queue = Queue(10)
+        expected_result = []
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        worker.retry_edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards",
+                                    {'meta': {'id': document_id, 'author': author,
+                                              'sourceRequests': [
+                                                  'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
+        expected_result.append(Data(tender_id, award_id, '123', "awards",
+                                    file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                            "code": "notFound"},
+                                                  "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                           'id': document_id, "version": version, 'author': author,
+                                                           'sourceRequests': [
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+        worker.get_edr_data_request = MagicMock(side_effect=[
+            RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': edr_req_id},
+                                             json=MagicMock(return_value=
+                                                            {"errors":
+                                                                 [{"description":
+                                                                       [{"error": {"errorDetails": "Couldn't find this code in EDR.", "code": u"notFound"},
+                                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                                  'id': document_id, "version": version, 'author': author
+                                                                                  }}]}]
+                                                             })))
+        ])
+        for result in expected_result:
+            self.assertEquals(check_queue.get(), result)
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_get_edr_data_mock_exception(self, mrequest, gevent_sleep):
+        """Accept 429 status code in first request with header 'Retry-After'"""
+        gevent_sleep.side_effect = custom_sleep
+        edr_req_id = generate_request_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        edrpou_codes_queue = Queue(10)
+        check_queue = Queue(10)
+        expected_result = []
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        worker.retry_edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards",
+                                                 {'meta': {'id': document_id, 'author': author,
+                                                           'sourceRequests': [
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
+        expected_result.append(Data(tender_id, award_id, '123', "awards",
+                                    file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                            "code": "notFound"},
+                                                  "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                           'id': document_id, "version": version, 'author': author,
+                                                           'sourceRequests': [
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+        worker.get_edr_data_request = MagicMock(side_effect=[
+            Exception(),
+            RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': edr_req_id},
+                                             json=MagicMock(return_value=
+                                                            {"errors":
+                                                                 [{"description":
+                                                                       [{"error": {
+                                                                           "errorDetails": "Couldn't find this code in EDR.",
+                                                                           "code": u"notFound"},
+                                                                         "meta": {
+                                                                             "sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                             'id': document_id, "version": version,
+                                                                             'author': author
+                                                                             }}]}]
+                                                             })))
+        ])
+        for result in expected_result:
+            self.assertEquals(check_queue.get(), result)
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
     def test_job_get_edr_id_dead(self, mrequest, gevent_sleep):
         """Recieve 404 and not valid data (worker dies). Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
@@ -359,8 +488,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
-        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()

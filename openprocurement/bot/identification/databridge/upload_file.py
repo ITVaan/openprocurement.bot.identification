@@ -297,6 +297,7 @@ class UploadFile(Greenlet):
                                                                           tender_data.item_id))
 
     def update_processing_items(self, tender_id, item_id):
+        # import pdb;pdb.set_trace()
         key = '{}_{}'.format(tender_id, item_id)
         if self.processing_items[key] > 1:
             self.processing_items[key] -= 1
