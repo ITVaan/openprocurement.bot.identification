@@ -33,14 +33,12 @@ logger = logging.getLogger(__name__)
 
 
 class TendersClientSync(BaseTendersClientSync):
-
     @check_412
     def request(self, *args, **kwargs):
         return super(TendersClientSync, self).request(*args, **kwargs)
 
 
 class TendersClient(BaseTendersClient):
-
     @check_412
     def _create_tender_resource_item(self, *args, **kwargs):
         return super(TendersClient, self)._create_tender_resource_item(*args, **kwargs)
@@ -81,7 +79,7 @@ class EdrDataBridge(object):
         # init queues for workers
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
-        self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with detailed info from EDR (Data.file_content)
+        self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with info from EDR (Data.file_content)
         # upload_to_tender_queue - queue with  file's get_url
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
 
@@ -138,7 +136,7 @@ class EdrDataBridge(object):
     def check_doc_service(self):
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
-        except RequestError as e:
+        except Exception as e:
             logger.info('DocService connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
@@ -150,7 +148,7 @@ class EdrDataBridge(object):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
             self.proxyClient.health(self.sandbox_mode)
-        except RequestException as e:
+        except Exception as e:
             logger.info('Proxy server connection error, message {} {}'.format(e, self.sandbox_mode),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
             raise e
@@ -162,7 +160,7 @@ class EdrDataBridge(object):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
             self.client.head('/api/{}/spore'.format(self.api_version))
-        except RequestError as e:
+        except Exception as e:
             logger.info('TendersServer connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
@@ -214,29 +212,35 @@ class EdrDataBridge(object):
                 self.check_services()
                 if counter == 20:
                     counter = 0
-                    logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
-                                'Upload to doc service {}; Retry upload to doc service {}; '
-                                'Upload to tender {}; Retry upload to tender {}'.format(
-                                    self.filtered_tender_ids_queue.qsize(),
-                                    self.edrpou_codes_queue.qsize(),
-                                    self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
-                                    self.upload_to_doc_service_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
-                                    self.upload_to_tender_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
-                                ))
+                    self.log_queues_status()
                 counter += 1
-                for name, job in self.jobs.items():
-                    logger.debug("{}.dead: {}".format(name, job.dead))
-                    if job.dead:
-                        logger.warning('Restarting {} worker'.format(name),
-                                       extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
-                        self.jobs[name] = gevent.spawn(getattr(self, name))
+                self.check_and_restart_workers()
         except KeyboardInterrupt:
             logger.info('Exiting...')
             gevent.killall(self.jobs, timeout=5)
         except Exception as e:
             logger.error(e)
+
+    def log_queues_status(self):
+        logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
+                    'Upload to doc service {}; Retry upload to doc service {}; '
+                    'Upload to tender {}; Retry upload to tender {}'.format(
+            self.filtered_tender_ids_queue.qsize(),
+            self.edrpou_codes_queue.qsize(),
+            self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
+            self.upload_to_doc_service_queue.qsize(),
+            self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
+            self.upload_to_tender_queue.qsize(),
+            self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
+        ))
+
+    def check_and_restart_workers(self):
+        for name, job in self.jobs.items():
+            logger.debug("{}.dead: {}".format(name, job.dead))
+            if job.dead:
+                logger.warning('Restarting {} worker'.format(name),
+                               extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
+                self.jobs[name] = gevent.spawn(getattr(self, name))
 
 
 def main():
