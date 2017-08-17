@@ -8,6 +8,7 @@ from logging import getLogger
 from datetime import datetime
 from restkit import ResourceError
 from collections import namedtuple
+from pickle import dumps, loads
 
 from openprocurement.bot.identification.databridge.constants import file_name
 
@@ -44,11 +45,24 @@ class ProcessTracker(object):
 
     def check_processing_item(self, tender_id, item_id):
         """Check if current tender_id, item_id is processing"""
-        return item_key(tender_id, item_id) in self.processing_items.keys()
+        return (item_key(tender_id, item_id) in self.processing_items.keys()
+                and not self.check_unfinished_loads(tender_id, item_id))
 
     def check_processed_item(self, tender_id, item_id):
         """Check if current tender_id, item_id was already processed"""
         return item_key(tender_id, item_id) in self.processed_items.keys()
+
+    def check_unfinished_loads(self, tender_id, item_id):
+        LOGGER.info("Checking unfinished job {}".format(item_key(tender_id, item_id)))
+        return self._db.has(item_key(tender_id, item_id))
+
+    def add_unfinished_load(self, tender_data):
+        LOGGER.info("Adding unfinished job {}".format(data_string(tender_data)))
+        self._db.put(item_key(tender_data.tender_id, tender_data.item_id), dumps(tender_data))
+
+    def remove_unfinished_load(self, tender_data):
+        LOGGER.info("Removing unfinished job {}".format(data_string(tender_data)))
+        self._db.remove(item_key(tender_data.tender_id, tender_data.item_id))
 
     def check_processed_tenders(self, tender_id):
         return self._db.has(db_key(tender_id)) or False

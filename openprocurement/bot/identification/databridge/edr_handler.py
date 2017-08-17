@@ -105,6 +105,7 @@ class EdrHandler(Greenlet):
                 else:
                     self.process_tracker.set_item(tender_data.tender_id, tender_data.item_id, len(response.json()['data']))
                     for data in data_list:
+                        self.process_tracker.add_unfinished_load(data)
                         self.upload_to_doc_service_queue.put(data)
                         logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue.'.format(
                             data_string(data), data.file_content['meta']['id']))
@@ -192,6 +193,7 @@ class EdrHandler(Greenlet):
                         self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                     else:
                         for data in data_list:
+                            self.process_tracker.add_unfinished_load(data)
                             self.upload_to_doc_service_queue.put(data)
                             logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue from retry.'.format(
                                 data_string(data), data.file_content['meta']['id']))

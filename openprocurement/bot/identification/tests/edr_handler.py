@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+import subprocess
+
+from openprocurement.bot.identification.databridge.caching import Db
+from redis import StrictRedis
 from requests import Response
 
 from gevent import monkey
@@ -15,6 +19,7 @@ from gevent.queue import Queue, Empty
 from gevent.hub import LoopExit
 from mock import patch, MagicMock
 from munch import munchify
+from time import sleep
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
@@ -30,8 +35,28 @@ from openprocurement.bot.identification.databridge.sleep_change_value import API
 def get_random_edr_ids(count=1):
     return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
 
+config = {
+    "main": {
+        "cache_host": "127.0.0.1",
+        "cache_port": "16379",
+        "cache_db_name": 0
+    }
+}
+
 
 class TestEdrHandlerWorker(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.redis_process = subprocess.Popen(['redis-server', '--port', str(config['main']['cache_port'])])
+        sleep(0.1)
+        cls.redis = StrictRedis(port=str(config['main']['cache_port']))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.redis_process.terminate()
+        cls.redis_process.wait()
+
     def setUp(self):
         self.source_date = ["2017-04-25T11:56:36+00:00"]
         self.gen_req_id = [generate_request_id() for _ in xrange(10)]
@@ -51,7 +76,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.url = "{url}".format(url=self.proxy_client.verify_url)
         self.local_edr_ids = get_random_edr_ids(2)
         self.edr_ids = get_random_edr_ids(1)[0]
-        self.process_tracker = ProcessTracker()
+        self.db = Db(config)
+        self.process_tracker = ProcessTracker(self.db)
         self.worker = EdrHandler.spawn(self.proxy_client, self.edrpou_codes_queue,
                                        self.upload_to_doc_service_queue, self.process_tracker, MagicMock())
         self.sleep_change_value = APIRateController()
@@ -62,6 +88,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     def tearDown(self):
         self.worker.shutdown()
+        self.redis.flushall()
         self.assertEqual(self.edrpou_codes_queue.qsize(), 0)
         self.assertEqual(self.edr_ids_queue.qsize(), 0)
         del self.worker

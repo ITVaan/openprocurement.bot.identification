@@ -96,6 +96,7 @@ class UploadFile(Greenlet):
                                           "DOCUMENT_ID": document_id}))
         # delete current tender after successful upload file (to avoid reloading file)
         self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
+        self.process_tracker.remove_unfinished_load(tender_data)
         self.sleep_change_value.decrement()
         if retry == '':
             self.upload_to_tender_queue.get()

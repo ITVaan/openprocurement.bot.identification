@@ -24,10 +24,12 @@ class Db(object):
             self.db = redis.StrictRedis(host=self._host, port=self._port, db=self._db_name)
             self.set_value = self.db.set
             self.has_value = self.db.exists
+            self.delete = self.db.delete
             LOGGER.info("Cache initialized")
         else:
             self.set_value = lambda x, y, z: None
             self.has_value = lambda x: None
+            self.delete = lambda x: None
 
     def config_get(self, name):
         return self.config.get('main').get(name)
@@ -43,6 +45,10 @@ class Db(object):
     def has(self, key):
         LOGGER.info("Checking if code {} is in the cache".format(key))
         return self.has_value(key)
+
+    def remove(self, key):
+        LOGGER.info("Removing code {} from the cache".format(key))
+        return self.delete(key)
 
 
 def db_key(tender_id):
