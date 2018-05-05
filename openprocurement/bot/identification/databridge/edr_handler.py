@@ -154,12 +154,19 @@ class EdrHandler(BaseWorker):
             else:
                 logger.info('Put {} in back of retry_edrpou_codes_queue. Response {}'.format(tender_data, res_json),
                             extra=journal_context(params=tender_data.log_params()))
-                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
+                if res_json['errors'][0]['description'][0]['code'] == 2:
+                    self.retry_edrpou_codes_queue.get()
+                else:
+                    self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep()
         except Exception as e:
             logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(tender_data, e.message),
                         extra=journal_context(params=tender_data.log_params()))
-            self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
+            res_json = get_res_json(e.message)
+            if type(res_json)!= str and res_json['errors'][0]['description'][0]['code'] == 2:
+                self.retry_edrpou_codes_queue.get()
+            else:
+                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
             gevent.sleep()
         else:
             if response.status_code == 429:
