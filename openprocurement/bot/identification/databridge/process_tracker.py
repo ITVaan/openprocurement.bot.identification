@@ -1,11 +1,18 @@
 # coding=utf-8
 import pickle
+import logging.config
+import gevent
+
 
 from datetime import datetime
 
 from openprocurement.bot.identification.databridge.caching import db_key
 from openprocurement.bot.identification.databridge.utils import item_key
+from openprocurement.bot.identification.databridge.journal_msg_ids import DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER
+from openprocurement.bot.identification.databridge.utils import journal_context
 
+
+logger = logging.getLogger(__name__)
 
 class ProcessTracker(object):
     def __init__(self, db=None, ttl=300):
@@ -62,5 +69,8 @@ class ProcessTracker(object):
             del self.processing_items[key]
 
     def update_items_and_tender(self, tender_id, item_id, document_id):
+        logger.info('Updating items and tender: tender_id {}; item_id: {}; document_id: {}'.format(
+            tender_id, item_id, document_id),
+            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER}))
         self._update_processing_items(tender_id, item_id, document_id)
         self._remove_docs_amount_from_tender(tender_id)
